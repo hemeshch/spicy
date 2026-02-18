@@ -9,7 +9,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   thinking?: string;
-  changes?: { filename: string; description: string }[];
+  changes?: { component?: string; filename: string; description: string }[];
   isLoading?: boolean;
   isStreaming?: boolean;
 }

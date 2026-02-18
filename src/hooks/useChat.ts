@@ -7,7 +7,7 @@ interface StreamEvent {
   content?: string;
   message?: string;
   explanation?: string;
-  changes?: { filename: string; description: string }[];
+  changes?: { component?: string; filename: string; description: string }[];
 }
 
 export function useChat(activeFile: string | null) {

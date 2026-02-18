@@ -6,6 +6,7 @@ use tauri::State;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct FileChange {
+    pub component: Option<String>,
     pub filename: String,
     pub description: String,
 }
@@ -61,7 +62,7 @@ You have two modes:
   "modified_asc": "<the complete modified .asc file content>",
   "explanation": "<a clear explanation of what you changed and why>",
   "changes": [
-    { "filename": "<filename>", "description": "<brief description of change>" }
+    { "component": "R1", "filename": "<filename>", "description": "Value 10Ω → 24Ω" }
   ]
 }
 
@@ -222,6 +223,7 @@ pub async fn send_chat_message_stream(
     let mut buffer = String::new();
     let mut accumulated_text = String::new();
     let mut done_sent = false;
+    let mut suppress_text = false; // true when response looks like JSON edit
 
     // Process a single SSE data line; returns true if we should stop
     let process_line = |line: &str,
@@ -229,7 +231,8 @@ pub async fn send_chat_message_stream(
                         on_event: &Channel<StreamEvent>,
                         active_file: &Option<String>,
                         dir: &str,
-                        done_sent: &mut bool|
+                        done_sent: &mut bool,
+                        suppress_text: &mut bool|
      -> bool {
         let data = match line.strip_prefix("data: ") {
             Some(d) => d,
@@ -260,10 +263,16 @@ pub async fn send_chat_message_stream(
                     }
                     "text_delta" => {
                         if let Some(text) = parsed["delta"]["text"].as_str() {
+                            // Detect JSON edit on first text chunk
+                            if accumulated_text.is_empty() && text.trim_start().starts_with('{') {
+                                *suppress_text = true;
+                            }
                             accumulated_text.push_str(text);
-                            let _ = on_event.send(StreamEvent::Text {
-                                content: text.to_string(),
-                            });
+                            if !*suppress_text {
+                                let _ = on_event.send(StreamEvent::Text {
+                                    content: text.to_string(),
+                                });
+                            }
                         }
                     }
                     _ => {}
@@ -298,6 +307,7 @@ pub async fn send_chat_message_stream(
                                     .iter()
                                     .filter_map(|c| {
                                         Some(FileChange {
+                                            component: c["component"].as_str().map(|s| s.to_string()),
                                             filename: c["filename"].as_str()?.to_string(),
                                             description: c["description"]
                                                 .as_str()?
@@ -364,6 +374,7 @@ pub async fn send_chat_message_stream(
                 &active_file,
                 &dir,
                 &mut done_sent,
+                &mut suppress_text,
             ) {
                 break 'outer;
             }
@@ -382,6 +393,7 @@ pub async fn send_chat_message_stream(
                     &active_file,
                     &dir,
                     &mut done_sent,
+                    &mut suppress_text,
                 );
             }
         }
@@ -412,6 +424,7 @@ pub async fn send_chat_message_stream(
                             .iter()
                             .filter_map(|c| {
                                 Some(FileChange {
+                                    component: c["component"].as_str().map(|s| s.to_string()),
                                     filename: c["filename"].as_str()?.to_string(),
                                     description: c["description"].as_str()?.to_string(),
                                 })

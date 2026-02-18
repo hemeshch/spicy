@@ -12,6 +12,7 @@ const RAINBOW_COLORS = [
 interface FileChangeProps {
   index: number;
   change: {
+    component?: string;
     filename: string;
     description: string;
   };
@@ -21,13 +22,15 @@ export function FileChange({ index, change }: FileChangeProps) {
   const color = RAINBOW_COLORS[index % RAINBOW_COLORS.length];
 
   return (
-    <div
-      className="file-change-chip"
-      style={{ '--chip-color': color } as React.CSSProperties}
-    >
-      <span className="chip-component">{change.filename}</span>
-      <span className="chip-separator">&middot;</span>
+    <div className="file-change-chip">
+      {change.component && (
+        <>
+          <span className="chip-component" style={{ color }}>{change.component}</span>
+          <span className="chip-separator">&middot;</span>
+        </>
+      )}
       <span className="chip-text">{change.description}</span>
+      <span className="chip-filename">{change.filename}</span>
     </div>
   );
 }

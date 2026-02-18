@@ -13,15 +13,18 @@
 
 .chip-component {
   font-weight: 600;
-  color: var(--chip-color);
+  /* color set inline via style prop */
+  flex-shrink: 0;
 }
 
 .chip-separator {
   color: #ccc;
+  flex-shrink: 0;
 }
 
 .chip-text {
   flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
