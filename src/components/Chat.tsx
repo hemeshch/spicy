@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Message, type ChatMessage } from './Message';
+import type { ChatSessionMeta } from '../hooks/useChat';
 import './Chat.css';
 
 const RAINBOW = ['#61BB46', '#FDB827', '#F5821F', '#E03A3E', '#963D97', '#009DDC'];
@@ -12,9 +13,23 @@ interface ChatProps {
   onSend: (message: string) => void;
   promptColor: string;
   activeFile: string | null;
+  sessions: ChatSessionMeta[];
+  activeSessionId: string | null;
+  onSwitchSession: (id: string) => void;
+  onNewSession: () => void;
 }
 
-export function Chat({ messages, isLoading, onSend, promptColor, activeFile }: ChatProps) {
+export function Chat({
+  messages,
+  isLoading,
+  onSend,
+  promptColor,
+  activeFile,
+  sessions,
+  activeSessionId,
+  onSwitchSession,
+  onNewSession,
+}: ChatProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -35,8 +50,40 @@ export function Chat({ messages, isLoading, onSend, promptColor, activeFile }: C
     setInput('');
   };
 
+  const showHeader = sessions.length > 0 || messages.length > 0;
+  const isEmptySession = messages.length === 0 && !activeSessionId;
+
   return (
     <div className="chat">
+      {showHeader && (
+        <div className="chat-header">
+          <select
+            className="session-select"
+            value={activeSessionId || ''}
+            onChange={(e) => {
+              if (e.target.value) onSwitchSession(e.target.value);
+            }}
+            disabled={isLoading}
+          >
+            {!activeSessionId && (
+              <option value="">new chat</option>
+            )}
+            {sessions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title} ({s.message_count})
+              </option>
+            ))}
+          </select>
+          <button
+            className="new-chat-btn"
+            onClick={onNewSession}
+            disabled={isLoading || isEmptySession}
+            title="Start new chat"
+          >
+            + new
+          </button>
+        </div>
+      )}
       <div className="chat-messages">
         {messages.length === 0 && !isLoading ? (
           <div className="chat-empty">

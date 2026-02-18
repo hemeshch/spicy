@@ -22,7 +22,7 @@ export default function App() {
 
   const activeFile = files.length > 0 ? files[activeTabIndex] : null;
   const promptColor = getTabColor(activeTabIndex);
-  const { messages, isLoading, sendMessage } = useChat(activeFile);
+  const { messages, isLoading, sendMessage, sessions, activeSessionId, switchSession, newSession } = useChat(activeFile);
 
   const handleSaveApiKey = useCallback(async () => {
     if (!apiKey.trim()) return;
@@ -135,6 +135,10 @@ export default function App() {
             onSend={sendMessage}
             promptColor={promptColor}
             activeFile={activeFile}
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            onSwitchSession={switchSession}
+            onNewSession={newSession}
           />
         </div>
       )}

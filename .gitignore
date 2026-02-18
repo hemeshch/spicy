@@ -21,6 +21,9 @@ src-tauri/target
 # LTspice examples (external)
 ltspice-examples
 
+# Spicy chat history
+.spicy/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
