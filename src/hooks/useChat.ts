@@ -6,6 +6,7 @@ interface StreamEvent {
   type: 'thinking' | 'text' | 'done' | 'error';
   content?: string;
   message?: string;
+  explanation?: string;
   changes?: { filename: string; description: string }[];
 }
 
@@ -72,11 +73,16 @@ export function useChat(activeFile: string | null) {
 
             case 'done':
               setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? { ...m, isStreaming: false, changes: event.changes }
-                    : m
-                )
+                prev.map((m) => {
+                  if (m.id !== assistantId) return m;
+                  return {
+                    ...m,
+                    // If backend sent an explanation (edit mode), replace raw JSON with it
+                    content: event.explanation || m.content,
+                    isStreaming: false,
+                    changes: event.changes,
+                  };
+                })
               );
               setIsLoading(false);
               break;
