@@ -26,7 +26,7 @@
   align-items: center;
   background: var(--bg-input);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   padding: 4px 4px 4px 20px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -65,32 +65,97 @@
 }
 
 .run-button {
-  padding: 10px 22px;
-  background: var(--border-light);
-  border: none;
-  border-radius: 10px;
+  padding: 8px 20px;
+  background: linear-gradient(180deg, #fff 0%, #e8e4db 100%);
+  border: 1.5px solid #c4bfb4;
+  border-radius: 6px;
   color: var(--text-tertiary);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
   cursor: default;
-  transition: all 0.15s ease;
+  transition: all 0.1s;
   flex-shrink: 0;
+  box-shadow: 0 1px 0 #fff inset, 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .run-button.has-input {
-  background: var(--bg-user-bubble);
+  background: linear-gradient(180deg, #3a3a3a 0%, #1a1a1a 100%);
+  border-color: #111;
   color: var(--text-on-dark);
   cursor: pointer;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.1) inset, 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .run-button.has-input:hover {
-  opacity: 0.9;
+  background: linear-gradient(180deg, #444 0%, #222 100%);
+}
+
+.run-button.has-input:active {
+  background: linear-gradient(180deg, #1a1a1a 0%, #2a2a2a 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) inset;
 }
 
 .run-button:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* Empty state */
+.chat-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.chat-empty-dots {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.chat-empty-dots .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.chat-empty-title {
+  font-family: var(--font-serif);
+  font-size: 42px;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+
+.chat-empty-subtitle {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-secondary);
+  margin: 0 0 20px;
+}
+
+.chat-empty-pills {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.chat-empty-pill {
+  padding: 6px 18px;
+  border: 1.5px solid;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: default;
+  user-select: none;
 }
 
 .input-footer {

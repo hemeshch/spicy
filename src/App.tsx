@@ -85,10 +85,10 @@ export default function App() {
             </div>
             <h1 className="welcome-title">spicy</h1>
             <p className="welcome-subtitle">
-              describe what you want to change. i'll edit your .asc files directly.
+              "adding spice to LTSpice"
             </p>
 
-            {!apiKeySaved && (
+{!apiKeySaved && (
               <div className="api-key-section">
                 <div className="api-key-input-row">
                   <input
@@ -114,6 +114,9 @@ export default function App() {
             )}
 
             <button className="open-folder-btn" onClick={handleOpenFolder}>
+              <svg className="folder-icon" viewBox="0 0 20 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 5V3a1 1 0 0 1 1-1h4.5l2 2H17a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5z"/>
+              </svg>
               open project folder
             </button>
             {error && <p className="error-text">{error}</p>}

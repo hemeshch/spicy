@@ -2,6 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { Message, type ChatMessage } from './Message';
 import './Chat.css';
 
+const RAINBOW = ['#61BB46', '#FDB827', '#F5821F', '#E03A3E', '#963D97', '#009DDC'];
+const SUGGESTIONS = ['modify components', 'add subcircuits', 'adjust params', 'debug convergence'];
+const PILL_COLORS = [RAINBOW[0], RAINBOW[1], RAINBOW[3], RAINBOW[5]];
+
 interface ChatProps {
   messages: ChatMessage[];
   isLoading: boolean;
@@ -34,18 +38,41 @@ export function Chat({ messages, isLoading, onSend, promptColor, activeFile }: C
   return (
     <div className="chat">
       <div className="chat-messages">
-        {messages.map((msg) => (
-          <Message key={msg.id} message={msg} />
-        ))}
-        {isLoading && !messages.some((m) => m.isStreaming) && (
-          <Message
-            message={{
-              id: 'loading',
-              role: 'assistant',
-              content: '',
-              isLoading: true,
-            }}
-          />
+        {messages.length === 0 && !isLoading ? (
+          <div className="chat-empty">
+            <div className="chat-empty-dots">
+              {RAINBOW.map((c, i) => (
+                <span key={i} className="dot" style={{ background: c }} />
+              ))}
+            </div>
+            <h2 className="chat-empty-title">spicy</h2>
+            <p className="chat-empty-subtitle">
+              describe what you want to change. i'll edit your .asc files directly.
+            </p>
+            <div className="chat-empty-pills">
+              {SUGGESTIONS.map((label, i) => (
+                <span key={label} className="chat-empty-pill" style={{ borderColor: PILL_COLORS[i], color: PILL_COLORS[i], background: `${PILL_COLORS[i]}12` }}>
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            {messages.map((msg) => (
+              <Message key={msg.id} message={msg} />
+            ))}
+            {isLoading && !messages.some((m) => m.isStreaming) && (
+              <Message
+                message={{
+                  id: 'loading',
+                  role: 'assistant',
+                  content: '',
+                  isLoading: true,
+                }}
+              />
+            )}
+          </>
         )}
         <div ref={messagesEndRef} />
       </div>
