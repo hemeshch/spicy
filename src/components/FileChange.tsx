@@ -25,7 +25,8 @@ export function FileChange({ index, change }: FileChangeProps) {
       className="file-change-chip"
       style={{ '--chip-color': color } as React.CSSProperties}
     >
-      <span className="chip-dot" />
+      <span className="chip-component">{change.filename}</span>
+      <span className="chip-separator">&middot;</span>
       <span className="chip-text">{change.description}</span>
     </div>
   );

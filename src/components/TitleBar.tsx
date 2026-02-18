@@ -1,11 +1,27 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import './TitleBar.css';
 
-export function TitleBar() {
+interface TitleBarProps {
+  folderName?: string | null;
+  activeFile?: string | null;
+}
+
+export function TitleBar({ folderName, activeFile }: TitleBarProps) {
   const appWindow = getCurrentWindow();
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.traffic-light')) return;
+    e.preventDefault();
+    appWindow.startDragging();
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.traffic-light')) return;
+    appWindow.toggleMaximize();
+  };
+
   return (
-    <div className="title-bar" data-tauri-drag-region>
+    <div className="title-bar" onMouseDown={handleMouseDown} onDoubleClick={handleDoubleClick}>
       <div className="traffic-lights">
         <button
           className="traffic-light close"
@@ -20,7 +36,9 @@ export function TitleBar() {
           onClick={() => appWindow.toggleMaximize()}
         />
       </div>
-      <span className="title-bar-text">spicy</span>
+      <span className="title-bar-text">
+        {folderName || 'spicy'}{activeFile ? ` — ${activeFile}` : ''}
+      </span>
       <div className="title-bar-spacer" />
     </div>
   );

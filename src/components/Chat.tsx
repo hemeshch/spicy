@@ -7,9 +7,10 @@ interface ChatProps {
   isLoading: boolean;
   onSend: (message: string) => void;
   promptColor: string;
+  activeFile: string | null;
 }
 
-export function Chat({ messages, isLoading, onSend, promptColor }: ChatProps) {
+export function Chat({ messages, isLoading, onSend, promptColor, activeFile }: ChatProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -36,7 +37,7 @@ export function Chat({ messages, isLoading, onSend, promptColor }: ChatProps) {
         {messages.map((msg) => (
           <Message key={msg.id} message={msg} />
         ))}
-        {isLoading && (
+        {isLoading && !messages.some((m) => m.isStreaming) && (
           <Message
             message={{
               id: 'loading',
@@ -60,19 +61,24 @@ export function Chat({ messages, isLoading, onSend, promptColor }: ChatProps) {
             ref={inputRef}
             type="text"
             className="chat-input"
-            placeholder="ask spicy to modify your circuit..."
+            placeholder="describe a change to your circuit..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={isLoading}
           />
           <button
             type="submit"
-            className="run-button"
-            disabled={!input.trim() || isLoading}
+            className={`run-button ${input.trim() ? 'has-input' : ''}`}
+            disabled={isLoading}
           >
             run
           </button>
         </div>
+        {activeFile && (
+          <div className="input-footer">
+            <span>editing: {activeFile}</span>
+          </div>
+        )}
       </form>
     </div>
   );

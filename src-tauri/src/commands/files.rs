@@ -15,6 +15,12 @@ pub fn set_api_key(state: State<AppState>, key: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub fn has_api_key(state: State<AppState>) -> Result<bool, String> {
+    let api_key = state.api_key.lock().map_err(|e| e.to_string())?;
+    Ok(!api_key.is_empty())
+}
+
 fn collect_asc_files(dir: &std::path::Path, base: &std::path::Path, files: &mut Vec<String>) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {

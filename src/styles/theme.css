@@ -10,19 +10,22 @@
   --rainbow-blue: #009DDC;
 
   /* Background & Surface */
-  --bg-primary: #0A0A0A;
-  --bg-secondary: #141414;
-  --bg-surface: #1A1A1A;
-  --bg-elevated: #222222;
+  --bg-primary: #faf8f4;
+  --bg-surface: #ffffff;
+  --bg-input: #faf8f4;
+  --bg-user-bubble: #2c2c2c;
 
   /* Text */
-  --text-primary: #F5F5F5;
-  --text-secondary: #999999;
-  --text-tertiary: #666666;
+  --text-primary: #2c2c2c;
+  --text-body: #3a3530;
+  --text-secondary: #a09888;
+  --text-tertiary: #b5ad9e;
+  --text-faint: #ccc5b8;
+  --text-on-dark: #faf8f4;
 
   /* Borders */
-  --border-subtle: #2A2A2A;
-  --border-default: #333333;
+  --border-default: #e8e4db;
+  --border-light: #ece8e0;
 
   /* Fonts */
   --font-serif: 'Instrument Serif', Georgia, serif;
@@ -30,9 +33,9 @@
   --font-mono: 'IBM Plex Mono', 'SF Mono', monospace;
 
   /* Spacing */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
 
   /* Rainbow stripe height */
   --stripe-height: 3px;
@@ -48,15 +51,25 @@ html, body, #root {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background: var(--bg-primary);
+  background: transparent;
   color: var(--text-primary);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Rainbow stripe gradient */
+/* Rainbow stripe — discrete segments */
 .rainbow-stripe {
+  display: flex;
   height: var(--stripe-height);
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.rainbow-stripe::before {
+  content: '';
+  display: flex;
+  width: 100%;
+  height: 100%;
   background: linear-gradient(
     to right,
     var(--rainbow-green) 0%,
@@ -94,5 +107,5 @@ html, body, #root {
 
 /* Selection */
 ::selection {
-  background: rgba(0, 157, 220, 0.3);
+  background: rgba(0, 157, 220, 0.15);
 }

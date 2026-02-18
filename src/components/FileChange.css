@@ -1,27 +1,35 @@
 .file-change-chip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: 20px;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #f5f3ee;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-secondary);
-  font-family: var(--font-mono);
 }
 
-.chip-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--chip-color);
-  flex-shrink: 0;
+.chip-component {
+  font-weight: 600;
+  color: var(--chip-color);
+}
+
+.chip-separator {
+  color: #ccc;
 }
 
 .chip-text {
+  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 250px;
+}
+
+.chip-filename {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  flex-shrink: 0;
 }

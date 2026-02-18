@@ -2,12 +2,20 @@
   "$schema": "https://raw.githubusercontent.com/nicedoc/tauri-v2-schema/refs/heads/main/schema.json",
   "productName": "Spicy",
   "version": "0.1.0",
-  "identifier": "com.spicy.app",
+  "identifier": "com.spicy.ltspice",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:5173",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
+  },
+  "bundle": {
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.png",
+      "icons/128x128.png",
+      "icons/32x32.png"
+    ]
   },
   "app": {
     "withGlobalTauri": true,
@@ -19,7 +27,8 @@
         "decorations": false,
         "resizable": true,
         "center": true,
-        "transparent": false
+        "transparent": true,
+        "backgroundColor": "#00000000"
       }
     ]
   }

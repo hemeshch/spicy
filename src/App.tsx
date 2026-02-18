@@ -7,6 +7,8 @@ import { Chat } from './components/Chat';
 import { useChat } from './hooks/useChat';
 import './App.css';
 
+const RAINBOW = ['#61BB46', '#FDB827', '#F5821F', '#E03A3E', '#963D97', '#009DDC'];
+
 type AppView = 'welcome' | 'chat';
 
 export default function App() {
@@ -14,6 +16,7 @@ export default function App() {
   const [files, setFiles] = useState<string[]>([]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [folderName, setFolderName] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [apiKeySaved, setApiKeySaved] = useState(false);
 
@@ -37,6 +40,7 @@ export default function App() {
       if (!selected) return;
 
       await invoke('set_working_directory', { path: selected });
+      setFolderName(selected.split('/').pop() || selected.split('\\').pop() || selected);
       const ascFiles = await invoke<string[]>('list_asc_files');
 
       if (ascFiles.length === 0) {
@@ -54,6 +58,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    invoke<boolean>('has_api_key').then((has) => {
+      if (has) setApiKeySaved(true);
+    });
+  }, []);
+
+  useEffect(() => {
     if (error) {
       const timer = setTimeout(() => setError(null), 5000);
       return () => clearTimeout(timer);
@@ -62,15 +72,20 @@ export default function App() {
 
   return (
     <div className="app">
-      <TitleBar />
       <div className="rainbow-stripe" />
+      <TitleBar folderName={folderName} activeFile={activeFile} />
 
       {view === 'welcome' ? (
         <div className="welcome">
           <div className="welcome-content">
+            <div className="welcome-dots">
+              {RAINBOW.map((c, i) => (
+                <span key={i} className="dot" style={{ background: c }} />
+              ))}
+            </div>
             <h1 className="welcome-title">spicy</h1>
             <p className="welcome-subtitle">
-              your AI copilot for LTspice
+              describe what you want to change. i'll edit your .asc files directly.
             </p>
 
             {!apiKeySaved && (
@@ -93,13 +108,9 @@ export default function App() {
                   </button>
                 </div>
                 <p className="api-key-hint">
-                  paste your Anthropic API key, or set ANTHROPIC_API_KEY env var
+                  paste your Anthropic API key, or set ANTHROPIC_API_KEY in .env
                 </p>
               </div>
-            )}
-
-            {apiKeySaved && (
-              <p className="api-key-saved">API key saved</p>
             )}
 
             <button className="open-folder-btn" onClick={handleOpenFolder}>
@@ -120,9 +131,12 @@ export default function App() {
             isLoading={isLoading}
             onSend={sendMessage}
             promptColor={promptColor}
+            activeFile={activeFile}
           />
         </div>
       )}
+
+      <div className="rainbow-stripe" />
     </div>
   );
 }

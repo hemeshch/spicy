@@ -1,9 +1,9 @@
 .file-tabs {
   display: flex;
-  gap: 2px;
-  padding: 0 16px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-subtle);
+  gap: 4px;
+  padding: 8px 16px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-light);
   overflow-x: auto;
   flex-shrink: 0;
 }
@@ -16,23 +16,29 @@
   position: relative;
   display: flex;
   align-items: center;
-  padding: 8px 14px;
-  background: none;
-  border: none;
-  color: var(--text-tertiary);
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.15s;
+  transition: all 0.15s ease;
+  font-weight: 400;
 }
 
 .file-tab:hover {
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 .file-tab.active {
+  background: var(--bg-surface);
   color: var(--text-primary);
+  border-color: var(--border-default);
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .file-tab-name {
@@ -42,10 +48,10 @@
 
 .file-tab-indicator {
   position: absolute;
-  bottom: 0;
-  left: 8px;
-  right: 8px;
+  bottom: -1px;
+  left: 20%;
+  right: 20%;
   height: 2px;
   background: var(--tab-color);
-  border-radius: 1px 1px 0 0;
+  border-radius: 1px;
 }

@@ -1,15 +1,19 @@
-import { useState, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useState, useCallback, useRef } from 'react';
+import { invoke, Channel } from '@tauri-apps/api/core';
 import type { ChatMessage } from '../components/Message';
 
-interface ChatResponse {
-  explanation: string;
-  changes: { filename: string; description: string }[];
+interface StreamEvent {
+  type: 'thinking' | 'text' | 'done' | 'error';
+  content?: string;
+  message?: string;
+  changes?: { filename: string; description: string }[];
 }
 
 export function useChat(activeFile: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -19,42 +23,103 @@ export function useChat(activeFile: string | null) {
         content,
       };
 
+      const assistantId = `assistant-${Date.now()}`;
+
       setMessages((prev) => [...prev, userMsg]);
       setIsLoading(true);
 
+      // Add a placeholder assistant message for streaming
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantId,
+          role: 'assistant',
+          content: '',
+          thinking: '',
+          isStreaming: true,
+        },
+      ]);
+
       try {
-        // Build history for context (exclude loading messages)
-        const history = messages.map((m) => ({
+        const history = [...messagesRef.current, userMsg].map((m) => ({
           role: m.role,
           content: m.content,
         }));
 
-        const response = await invoke<ChatResponse>('send_chat_message', {
+        const channel = new Channel<StreamEvent>();
+
+        channel.onmessage = (event: StreamEvent) => {
+          switch (event.type) {
+            case 'thinking':
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, thinking: (m.thinking || '') + (event.content || '') }
+                    : m
+                )
+              );
+              break;
+
+            case 'text':
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, content: m.content + (event.content || '') }
+                    : m
+                )
+              );
+              break;
+
+            case 'done':
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, isStreaming: false, changes: event.changes }
+                    : m
+                )
+              );
+              setIsLoading(false);
+              break;
+
+            case 'error':
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        content: `Error: ${event.message || 'Unknown error'}`,
+                        isStreaming: false,
+                      }
+                    : m
+                )
+              );
+              setIsLoading(false);
+              break;
+          }
+        };
+
+        await invoke('send_chat_message_stream', {
           message: content,
           activeFile,
           history,
+          onEvent: channel,
         });
-
-        const assistantMsg: ChatMessage = {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: response.explanation,
-          changes: response.changes,
-        };
-
-        setMessages((prev) => [...prev, assistantMsg]);
       } catch (error) {
-        const errorMsg: ChatMessage = {
-          id: `error-${Date.now()}`,
-          role: 'assistant',
-          content: `Error: ${error}`,
-        };
-        setMessages((prev) => [...prev, errorMsg]);
-      } finally {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? {
+                  ...m,
+                  content: `Error: ${error}`,
+                  isStreaming: false,
+                }
+              : m
+          )
+        );
         setIsLoading(false);
       }
     },
-    [messages, activeFile]
+    [activeFile]
   );
 
   return { messages, isLoading, sendMessage };

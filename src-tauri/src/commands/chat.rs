@@ -1,5 +1,7 @@
 use crate::state::AppState;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
+use tauri::ipc::Channel;
 use tauri::State;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -8,10 +10,17 @@ pub struct FileChange {
     pub description: String,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct ChatResponse {
-    pub explanation: String,
-    pub changes: Vec<FileChange>,
+#[derive(Clone, Serialize)]
+#[serde(tag = "type")]
+pub enum StreamEvent {
+    #[serde(rename = "thinking")]
+    Thinking { content: String },
+    #[serde(rename = "text")]
+    Text { content: String },
+    #[serde(rename = "done")]
+    Done { changes: Vec<FileChange> },
+    #[serde(rename = "error")]
+    Error { message: String },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -21,21 +30,19 @@ struct ClaudeMessage {
 }
 
 #[derive(Serialize)]
-struct ClaudeRequest {
+struct ThinkingConfig {
+    #[serde(rename = "type")]
+    thinking_type: String,
+}
+
+#[derive(Serialize)]
+struct ClaudeStreamRequest {
     model: String,
     max_tokens: u32,
     system: String,
     messages: Vec<ClaudeMessage>,
-}
-
-#[derive(Deserialize)]
-struct ClaudeApiResponse {
-    content: Vec<ClaudeContentBlock>,
-}
-
-#[derive(Deserialize)]
-struct ClaudeContentBlock {
-    text: Option<String>,
+    stream: bool,
+    thinking: ThinkingConfig,
 }
 
 const SYSTEM_PROMPT: &str = r#"You are Spicy, an AI assistant for LTspice circuit schematics (.asc files).
@@ -69,14 +76,44 @@ When modifying circuits:
 - Ensure wire connections remain valid
 - Keep all coordinates as integers"#;
 
+fn read_asc_file_content(dir: &str, filename: &str) -> Result<String, String> {
+    let file_path = std::path::Path::new(dir).join(filename);
+    match std::fs::read_to_string(&file_path) {
+        Ok(content) => Ok(content),
+        Err(_utf8_err) => {
+            match std::fs::read(&file_path) {
+                Ok(bytes) => {
+                    let content = if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
+                        let u16s: Vec<u16> = bytes[2..]
+                            .chunks(2)
+                            .filter_map(|c| {
+                                if c.len() == 2 {
+                                    Some(u16::from_le_bytes([c[0], c[1]]))
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+                        String::from_utf16_lossy(&u16s)
+                    } else {
+                        String::from_utf8_lossy(&bytes).to_string()
+                    };
+                    Ok(content)
+                }
+                Err(io_err) => Err(format!("Failed to read file {}: {}", filename, io_err)),
+            }
+        }
+    }
+}
+
 #[tauri::command]
-pub async fn send_chat_message(
+pub async fn send_chat_message_stream(
     state: State<'_, AppState>,
     message: String,
     active_file: Option<String>,
     history: Vec<serde_json::Value>,
-) -> Result<ChatResponse, String> {
-    // Re-read API key from env if not already set
+    on_event: Channel<StreamEvent>,
+) -> Result<(), String> {
     let api_key = {
         let mut key = state.api_key.lock().map_err(|e| e.to_string())?;
         if key.is_empty() {
@@ -88,18 +125,33 @@ pub async fn send_chat_message(
     };
 
     if api_key.is_empty() {
-        return Err("ANTHROPIC_API_KEY not set. Please set it as an environment variable.".to_string());
+        let _ = on_event.send(StreamEvent::Error {
+            message: "ANTHROPIC_API_KEY not set. Please set it as an environment variable."
+                .to_string(),
+        });
+        return Ok(());
     }
 
-    let dir = state.working_directory.lock().map_err(|e| e.to_string())?.clone();
-    let dir = dir.ok_or("No working directory set")?;
+    let dir = state
+        .working_directory
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone();
+    let dir = match dir {
+        Some(d) => d,
+        None => {
+            let _ = on_event.send(StreamEvent::Error {
+                message: "No working directory set".to_string(),
+            });
+            return Ok(());
+        }
+    };
 
     // Build user message with file context
     let mut user_content = String::new();
 
     if let Some(ref filename) = active_file {
-        let file_path = std::path::Path::new(&dir).join(filename);
-        match std::fs::read_to_string(&file_path) {
+        match read_asc_file_content(&dir, filename) {
             Ok(content) => {
                 user_content.push_str(&format!(
                     "Current file: {}\n\n```\n{}\n```\n\n",
@@ -107,30 +159,8 @@ pub async fn send_chat_message(
                 ));
             }
             Err(e) => {
-                // Try reading as bytes and converting from UTF-16
-                match std::fs::read(&file_path) {
-                    Ok(bytes) => {
-                        // Try UTF-16 LE
-                        let content = if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
-                            let u16s: Vec<u16> = bytes[2..]
-                                .chunks(2)
-                                .filter_map(|c| {
-                                    if c.len() == 2 { Some(u16::from_le_bytes([c[0], c[1]])) } else { None }
-                                })
-                                .collect();
-                            String::from_utf16_lossy(&u16s)
-                        } else {
-                            String::from_utf8_lossy(&bytes).to_string()
-                        };
-                        user_content.push_str(&format!(
-                            "Current file: {}\n\n```\n{}\n```\n\n",
-                            filename, content
-                        ));
-                    }
-                    Err(_) => {
-                        return Err(format!("Failed to read file {}: {}", filename, e));
-                    }
-                }
+                let _ = on_event.send(StreamEvent::Error { message: e });
+                return Ok(());
             }
         }
     }
@@ -153,11 +183,15 @@ pub async fn send_chat_message(
         content: user_content,
     });
 
-    let request = ClaudeRequest {
-        model: "claude-sonnet-4-20250514".to_string(),
-        max_tokens: 8192,
+    let request = ClaudeStreamRequest {
+        model: "claude-sonnet-4-6".to_string(),
+        max_tokens: 16000,
         system: SYSTEM_PROMPT.to_string(),
         messages,
+        stream: true,
+        thinking: ThinkingConfig {
+            thinking_type: "adaptive".to_string(),
+        },
     };
 
     let client = reqwest::Client::new();
@@ -174,60 +208,140 @@ pub async fn send_chat_message(
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(format!("API error ({}): {}", status, body));
+        let _ = on_event.send(StreamEvent::Error {
+            message: format!("API error ({}): {}", status, body),
+        });
+        return Ok(());
     }
 
-    let api_response: ClaudeApiResponse = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse API response: {}", e))?;
+    // Read SSE stream
+    let mut stream = response.bytes_stream();
+    let mut buffer = String::new();
+    let mut accumulated_text = String::new();
 
-    let text = api_response
-        .content
-        .first()
-        .and_then(|b| b.text.as_ref())
-        .ok_or("No text in API response")?;
-
-    // Try to parse as JSON with modified_asc (edit mode)
-    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text) {
-        if let Some(modified_asc) = parsed["modified_asc"].as_str() {
-            // Write the modified file to disk
-            if let Some(ref filename) = active_file {
-                let file_path = std::path::Path::new(&dir).join(filename);
-                std::fs::write(&file_path, modified_asc)
-                    .map_err(|e| format!("Failed to write file: {}", e))?;
+    while let Some(chunk) = stream.next().await {
+        let chunk = match chunk {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = on_event.send(StreamEvent::Error {
+                    message: format!("Stream error: {}", e),
+                });
+                return Ok(());
             }
+        };
 
-            let explanation = parsed["explanation"]
-                .as_str()
-                .unwrap_or("Changes applied.")
-                .to_string();
+        buffer.push_str(&String::from_utf8_lossy(&chunk));
 
-            let changes: Vec<FileChange> = if let Some(changes_arr) = parsed["changes"].as_array()
-            {
-                changes_arr
-                    .iter()
-                    .filter_map(|c| {
-                        Some(FileChange {
-                            filename: c["filename"].as_str()?.to_string(),
-                            description: c["description"].as_str()?.to_string(),
-                        })
-                    })
-                    .collect()
-            } else {
-                vec![]
-            };
+        // Process complete lines
+        while let Some(newline_pos) = buffer.find('\n') {
+            let line = buffer[..newline_pos].trim_end().to_string();
+            buffer = buffer[newline_pos + 1..].to_string();
 
-            return Ok(ChatResponse {
-                explanation,
-                changes,
-            });
+            if let Some(data) = line.strip_prefix("data: ") {
+                if data == "[DONE]" {
+                    continue;
+                }
+
+                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
+                    let event_type = parsed["type"].as_str().unwrap_or("");
+
+                    match event_type {
+                        "content_block_delta" => {
+                            let delta_type =
+                                parsed["delta"]["type"].as_str().unwrap_or("");
+
+                            match delta_type {
+                                "thinking_delta" => {
+                                    if let Some(thinking) =
+                                        parsed["delta"]["thinking"].as_str()
+                                    {
+                                        let _ = on_event.send(StreamEvent::Thinking {
+                                            content: thinking.to_string(),
+                                        });
+                                    }
+                                }
+                                "text_delta" => {
+                                    if let Some(text) = parsed["delta"]["text"].as_str() {
+                                        accumulated_text.push_str(text);
+                                        let _ = on_event.send(StreamEvent::Text {
+                                            content: text.to_string(),
+                                        });
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        "message_stop" => {
+                            // Check if accumulated text is JSON edit response
+                            if let Ok(json_val) =
+                                serde_json::from_str::<serde_json::Value>(&accumulated_text)
+                            {
+                                if let Some(modified_asc) = json_val["modified_asc"].as_str()
+                                {
+                                    // Write the modified file to disk
+                                    if let Some(ref filename) = active_file {
+                                        let file_path =
+                                            std::path::Path::new(&dir).join(filename);
+                                        if let Err(e) =
+                                            std::fs::write(&file_path, modified_asc)
+                                        {
+                                            let _ = on_event.send(StreamEvent::Error {
+                                                message: format!(
+                                                    "Failed to write file: {}",
+                                                    e
+                                                ),
+                                            });
+                                            return Ok(());
+                                        }
+                                    }
+
+                                    let changes: Vec<FileChange> =
+                                        if let Some(changes_arr) =
+                                            json_val["changes"].as_array()
+                                        {
+                                            changes_arr
+                                                .iter()
+                                                .filter_map(|c| {
+                                                    Some(FileChange {
+                                                        filename: c["filename"]
+                                                            .as_str()?
+                                                            .to_string(),
+                                                        description: c["description"]
+                                                            .as_str()?
+                                                            .to_string(),
+                                                    })
+                                                })
+                                                .collect()
+                                        } else {
+                                            vec![]
+                                        };
+
+                                    let _ =
+                                        on_event.send(StreamEvent::Done { changes });
+                                    return Ok(());
+                                }
+                            }
+
+                            // Analysis mode: plain text
+                            let _ = on_event.send(StreamEvent::Done { changes: vec![] });
+                        }
+                        "error" => {
+                            let error_msg = parsed["error"]["message"]
+                                .as_str()
+                                .unwrap_or("Unknown API error");
+                            let _ = on_event.send(StreamEvent::Error {
+                                message: error_msg.to_string(),
+                            });
+                            return Ok(());
+                        }
+                        _ => {}
+                    }
+                }
+            }
         }
     }
 
-    // Analysis mode: plain text response
-    Ok(ChatResponse {
-        explanation: text.to_string(),
-        changes: vec![],
-    })
+    // If stream ended without message_stop, still send done
+    let _ = on_event.send(StreamEvent::Done { changes: vec![] });
+    Ok(())
 }

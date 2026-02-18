@@ -3,6 +3,9 @@
   flex-direction: column;
   height: 100vh;
   background: var(--bg-primary);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-light);
 }
 
 /* Welcome Screen */
@@ -17,19 +20,33 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+}
+
+.welcome-dots {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.welcome-dots .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
 .welcome-title {
   font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 48px;
+  font-size: 42px;
   font-weight: 400;
+  font-style: italic;
   color: var(--text-primary);
-  letter-spacing: 1px;
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
 }
 
 .welcome-subtitle {
+  font-family: var(--font-sans);
   font-size: 15px;
   color: var(--text-secondary);
   margin-bottom: 20px;
@@ -41,7 +58,7 @@
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .api-key-input-row {
@@ -72,19 +89,19 @@
 
 .api-key-btn {
   padding: 8px 14px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
+  background: var(--bg-user-bubble);
+  border: none;
   border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
+  color: var(--text-on-dark);
+  font-family: var(--font-sans);
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: opacity 0.15s;
 }
 
 .api-key-btn:hover:not(:disabled) {
-  background: var(--border-default);
-  color: var(--text-primary);
+  opacity: 0.85;
 }
 
 .api-key-btn:disabled {
@@ -94,7 +111,7 @@
 
 .api-key-hint {
   font-size: 11px;
-  color: var(--text-tertiary);
+  color: var(--text-faint);
 }
 
 .api-key-saved {
@@ -108,17 +125,19 @@
   padding: 10px 24px;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .open-folder-btn:hover {
-  background: var(--bg-elevated);
   border-color: var(--text-tertiary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 .error-text {
