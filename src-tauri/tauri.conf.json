@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicedoc/tauri-v2-schema/refs/heads/main/schema.json",
+  "productName": "Spicy",
+  "version": "0.1.0",
+  "identifier": "com.spicy.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Spicy",
+        "width": 900,
+        "height": 700,
+        "decorations": false,
+        "resizable": true,
+        "center": true,
+        "transparent": false
+      }
+    ]
+  }
+}

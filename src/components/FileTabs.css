@@ -1,0 +1,51 @@
+.file-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.file-tabs::-webkit-scrollbar {
+  height: 0;
+}
+
+.file-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+
+.file-tab:hover {
+  color: var(--text-secondary);
+}
+
+.file-tab.active {
+  color: var(--text-primary);
+}
+
+.file-tab-name {
+  position: relative;
+  z-index: 1;
+}
+
+.file-tab-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: var(--tab-color);
+  border-radius: 1px 1px 0 0;
+}

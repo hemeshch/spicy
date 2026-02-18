@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital,wght@0,400;1,400&display=swap');
+
+:root {
+  /* Apple Rainbow Colors */
+  --rainbow-green: #61BB46;
+  --rainbow-yellow: #FDB827;
+  --rainbow-orange: #F5821F;
+  --rainbow-red: #E03A3E;
+  --rainbow-purple: #963D97;
+  --rainbow-blue: #009DDC;
+
+  /* Background & Surface */
+  --bg-primary: #0A0A0A;
+  --bg-secondary: #141414;
+  --bg-surface: #1A1A1A;
+  --bg-elevated: #222222;
+
+  /* Text */
+  --text-primary: #F5F5F5;
+  --text-secondary: #999999;
+  --text-tertiary: #666666;
+
+  /* Borders */
+  --border-subtle: #2A2A2A;
+  --border-default: #333333;
+
+  /* Fonts */
+  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SF Mono', monospace;
+
+  /* Spacing */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* Rainbow stripe height */
+  --stripe-height: 3px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Rainbow stripe gradient */
+.rainbow-stripe {
+  height: var(--stripe-height);
+  background: linear-gradient(
+    to right,
+    var(--rainbow-green) 0%,
+    var(--rainbow-green) 16.66%,
+    var(--rainbow-yellow) 16.66%,
+    var(--rainbow-yellow) 33.33%,
+    var(--rainbow-orange) 33.33%,
+    var(--rainbow-orange) 50%,
+    var(--rainbow-red) 50%,
+    var(--rainbow-red) 66.66%,
+    var(--rainbow-purple) 66.66%,
+    var(--rainbow-purple) 83.33%,
+    var(--rainbow-blue) 83.33%,
+    var(--rainbow-blue) 100%
+  );
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* Selection */
+::selection {
+  background: rgba(0, 157, 220, 0.3);
+}
