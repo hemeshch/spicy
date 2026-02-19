@@ -51,7 +51,7 @@ struct ClaudeStreamRequest {
 
 const SYSTEM_PROMPT: &str = r#"You are Spicy, an AI assistant for LTspice circuit schematics (.asc files).
 
-The user's currently active .asc file content will be provided at the start of their message, between ``` markers. Always use this content as context — never ask the user to paste it.
+The user's currently active .asc file content will be provided at the start of their message with line numbers (e.g. "1| Version 4"). Always use this content as context — never ask the user to paste it.
 
 You have two modes:
 
@@ -59,12 +59,23 @@ You have two modes:
 
 2. **Edit mode** — When the user asks to modify, change, add, or remove something in the circuit, respond with ONLY this JSON (no markdown, no code blocks):
 {
-  "modified_asc": "<the complete modified .asc file content>",
-  "explanation": "<a clear explanation of what you changed and why>",
+  "edits": [
+    { "start": 15, "end": 15, "replacement": "SYMATTR Value 24k" }
+  ],
+  "explanation": "Changed R1 from 10kΩ to 24kΩ",
   "changes": [
-    { "component": "R1", "filename": "<filename>", "description": "Value 10Ω → 24Ω" }
+    { "component": "R1", "filename": "<filename>", "description": "Value 10kΩ → 24kΩ" }
   ]
 }
+
+Edit instructions:
+- "start" and "end" are 1-based inclusive line numbers matching the numbered file content
+- "replacement" is the new text for that line range (can be multi-line with \n)
+- To replace a line: { "start": 15, "end": 15, "replacement": "new content" }
+- To delete lines: { "start": 15, "end": 17, "replacement": "" }
+- To insert after line 15: { "start": 15, "end": 15, "replacement": "<original line 15>\n<new lines>" }
+- Multiple edits in one response are fine; they will be applied bottom-up so line numbers stay correct
+- Edits MUST NOT have overlapping line ranges — each line should be touched by at most one edit
 
 LTspice .asc files are text-based schematics containing:
 - Version header, SHEET directive (sheet size)
@@ -79,6 +90,94 @@ When modifying circuits:
 - Update component values, add/remove components as requested
 - Ensure wire connections remain valid
 - Keep all coordinates as integers"#;
+
+fn apply_edits(file_path: &std::path::Path, edits: &[serde_json::Value]) -> Result<String, String> {
+    let content = std::fs::read_to_string(file_path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+
+    // Collect edits as (start, end, replacement) and sort descending by start line
+    let mut edit_ops: Vec<(usize, usize, String)> = edits
+        .iter()
+        .filter_map(|e| {
+            let start = e["start"].as_u64()? as usize;
+            let end = e["end"].as_u64()? as usize;
+            let replacement = e["replacement"].as_str()?.to_string();
+            Some((start, end, replacement))
+        })
+        .collect();
+    edit_ops.sort_by(|a, b| b.0.cmp(&a.0));
+
+    for (start, end, replacement) in edit_ops {
+        if start == 0 || end == 0 || start > lines.len() || end > lines.len() || start > end {
+            continue;
+        }
+        let start_idx = start - 1;
+        let end_idx = end; // exclusive for drain/splice
+        let new_lines: Vec<String> = if replacement.is_empty() {
+            vec![]
+        } else {
+            replacement.lines().map(|l| l.to_string()).collect()
+        };
+        lines.splice(start_idx..end_idx, new_lines);
+    }
+
+    let mut result = lines.join("\n");
+    if content.ends_with('\n') && !result.ends_with('\n') {
+        result.push('\n');
+    }
+    std::fs::write(file_path, &result)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+    Ok(result)
+}
+
+/// Shared helper: parse JSON edit response, apply edits, send Done event.
+/// Returns true if the response was handled as a JSON edit.
+fn handle_edit_response(
+    json_val: &serde_json::Value,
+    active_file: &Option<String>,
+    dir: &str,
+    on_event: &Channel<StreamEvent>,
+) -> bool {
+    let edits = match json_val["edits"].as_array() {
+        Some(e) => e,
+        None => return false,
+    };
+
+    if let Some(ref filename) = active_file {
+        let file_path = std::path::Path::new(dir).join(filename);
+        if let Err(e) = apply_edits(&file_path, edits) {
+            let _ = on_event.send(StreamEvent::Error { message: e });
+            return true;
+        }
+    }
+
+    let explanation = json_val["explanation"]
+        .as_str()
+        .unwrap_or("Changes applied.")
+        .to_string();
+
+    let changes: Vec<FileChange> = if let Some(changes_arr) = json_val["changes"].as_array() {
+        changes_arr
+            .iter()
+            .filter_map(|c| {
+                Some(FileChange {
+                    component: c["component"].as_str().map(|s| s.to_string()),
+                    filename: c["filename"].as_str()?.to_string(),
+                    description: c["description"].as_str()?.to_string(),
+                })
+            })
+            .collect()
+    } else {
+        vec![]
+    };
+
+    let _ = on_event.send(StreamEvent::Done {
+        changes,
+        explanation: Some(explanation),
+    });
+    true
+}
 
 fn read_asc_file_content(dir: &str, filename: &str) -> Result<String, String> {
     let file_path = std::path::Path::new(dir).join(filename);
@@ -157,9 +256,15 @@ pub async fn send_chat_message_stream(
     if let Some(ref filename) = active_file {
         match read_asc_file_content(&dir, filename) {
             Ok(content) => {
+                let numbered: String = content
+                    .lines()
+                    .enumerate()
+                    .map(|(i, line)| format!("{}| {}", i + 1, line))
+                    .collect::<Vec<_>>()
+                    .join("\n");
                 user_content.push_str(&format!(
-                    "Current file: {}\n\n```\n{}\n```\n\n",
-                    filename, content
+                    "Current file: {}\n\n{}\n\n",
+                    filename, numbered
                 ));
             }
             Err(e) => {
@@ -283,46 +388,7 @@ pub async fn send_chat_message_stream(
                 if let Ok(json_val) =
                     serde_json::from_str::<serde_json::Value>(accumulated_text)
                 {
-                    if let Some(modified_asc) = json_val["modified_asc"].as_str() {
-                        // Write the modified file to disk
-                        if let Some(ref filename) = active_file {
-                            let file_path = std::path::Path::new(dir).join(filename);
-                            if let Err(e) = std::fs::write(&file_path, modified_asc) {
-                                let _ = on_event.send(StreamEvent::Error {
-                                    message: format!("Failed to write file: {}", e),
-                                });
-                                *done_sent = true;
-                                return true;
-                            }
-                        }
-
-                        let explanation = json_val["explanation"]
-                            .as_str()
-                            .unwrap_or("Changes applied.")
-                            .to_string();
-
-                        let changes: Vec<FileChange> =
-                            if let Some(changes_arr) = json_val["changes"].as_array() {
-                                changes_arr
-                                    .iter()
-                                    .filter_map(|c| {
-                                        Some(FileChange {
-                                            component: c["component"].as_str().map(|s| s.to_string()),
-                                            filename: c["filename"].as_str()?.to_string(),
-                                            description: c["description"]
-                                                .as_str()?
-                                                .to_string(),
-                                        })
-                                    })
-                                    .collect()
-                            } else {
-                                vec![]
-                            };
-
-                        let _ = on_event.send(StreamEvent::Done {
-                            changes,
-                            explanation: Some(explanation),
-                        });
+                    if handle_edit_response(&json_val, active_file, dir, on_event) {
                         *done_sent = true;
                         return true;
                     }
@@ -402,42 +468,7 @@ pub async fn send_chat_message_stream(
     if !done_sent {
         // Stream ended — do final edit check on accumulated text
         if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&accumulated_text) {
-            if let Some(modified_asc) = json_val["modified_asc"].as_str() {
-                if let Some(ref filename) = active_file {
-                    let file_path = std::path::Path::new(&dir).join(filename);
-                    if let Err(e) = std::fs::write(&file_path, modified_asc) {
-                        let _ = on_event.send(StreamEvent::Error {
-                            message: format!("Failed to write file: {}", e),
-                        });
-                        return Ok(());
-                    }
-                }
-
-                let explanation = json_val["explanation"]
-                    .as_str()
-                    .unwrap_or("Changes applied.")
-                    .to_string();
-
-                let changes: Vec<FileChange> =
-                    if let Some(changes_arr) = json_val["changes"].as_array() {
-                        changes_arr
-                            .iter()
-                            .filter_map(|c| {
-                                Some(FileChange {
-                                    component: c["component"].as_str().map(|s| s.to_string()),
-                                    filename: c["filename"].as_str()?.to_string(),
-                                    description: c["description"].as_str()?.to_string(),
-                                })
-                            })
-                            .collect()
-                    } else {
-                        vec![]
-                    };
-
-                let _ = on_event.send(StreamEvent::Done {
-                    changes,
-                    explanation: Some(explanation),
-                });
+            if handle_edit_response(&json_val, &active_file, &dir, &on_event) {
                 return Ok(());
             }
         }
