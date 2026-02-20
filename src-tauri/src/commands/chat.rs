@@ -249,32 +249,17 @@ T=1e12, G=1e9, Meg=1e6, k=1e3, m=1e-3, u=1e-6, n=1e-9, p=1e-12, f=1e-15
 9. Double-check your coordinate math before outputting — wrong coordinates break the circuit
 10. Keep edits minimal: only change what's necessary for the requested modification
 
-## EDIT STRATEGY — FOLLOW THIS EXACT ORDER
+## EDIT STRATEGY
 
-When the user requests a circuit modification, work through these steps IN ORDER. Do not skip ahead or revisit earlier steps.
+When the user requests a circuit modification, do ALL reasoning in your thinking block:
+1. PARSE — State what the user wants
+2. FIND — Identify every component/wire/flag involved with line numbers and pin positions
+3. PLAN — List edits needed (deletions, modifications, insertions)
+4. CALCULATE — Compute coordinates for new components (all multiples of 16)
 
-**Step 1: PARSE** — State what the user wants in one sentence. If ambiguous, pick the most reasonable interpretation. Do NOT deliberate between multiple interpretations.
+Then OUTPUT only the JSON object. Your entire visible response must be the raw JSON — nothing before it, nothing after it. No markdown, no code blocks, no step labels, no explanation text outside the JSON.
 
-**Step 2: FIND** — List every component/wire/flag involved. For each, note:
-  - Line number in the file
-  - SYMBOL type, position, rotation
-  - Pin positions (compute ONCE using the formulas, no re-deriving)
-
-**Step 3: PLAN** — List the edits needed. For each edit, state:
-  - Lines to delete (component removal)
-  - Lines to modify (wire reconnection)
-  - New lines to insert (new components, wires, flags)
-  Choose values/positions NOW. Do not reconsider later.
-
-**Step 4: CALCULATE** — For any new components, compute coordinates:
-  - Symbol origin (x, y) and rotation
-  - Pin positions from the formula
-  - Wire endpoints connecting to existing nodes
-  All coordinates must be multiples of 16.
-
-**Step 5: OUTPUT** — Write the JSON. No further deliberation.
-
-RULES: Complete each step fully before moving to the next. Never say "let me reconsider" or "actually wait" — commit to your first reasonable answer and move forward. Do not calculate component values (the user specifies those, or use sensible defaults without lengthy justification). Do not narrate your thought process."#;
+RULES: Commit to your first reasonable answer. Do not narrate your thought process in the response. Do not calculate component values (use sensible defaults). The response must start with { and end with }."#;
 
 fn apply_edits(file_path: &std::path::Path, edits: &[serde_json::Value]) -> Result<String, String> {
     let content = std::fs::read_to_string(file_path)
@@ -318,6 +303,25 @@ fn apply_edits(file_path: &std::path::Path, edits: &[serde_json::Value]) -> Resu
 
 /// Shared helper: parse JSON edit response, apply edits, send Done event.
 /// Returns true if the response was handled as a JSON edit.
+fn reload_ltspice() {
+    std::thread::spawn(|| {
+        let _ = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(
+                r#"tell application "System Events"
+    if exists process "LTspice" then
+        tell application "LTspice" to activate
+        delay 0.3
+        tell process "LTspice"
+            click menu item "Revert to Saved" of menu "File" of menu bar 1
+        end tell
+    end if
+end tell"#,
+            )
+            .output();
+    });
+}
+
 fn handle_edit_response(
     json_val: &serde_json::Value,
     active_file: &Option<String>,
@@ -335,6 +339,7 @@ fn handle_edit_response(
             let _ = on_event.send(StreamEvent::Error { message: e });
             return true;
         }
+        reload_ltspice();
     }
 
     let explanation = json_val["explanation"]
@@ -579,6 +584,19 @@ pub async fn send_chat_message_stream(
                     }
                 }
 
+                // Fallback: extract JSON from mixed text (model may prefix with reasoning)
+                if let Some(json_start) = accumulated_text.find("{\"edits\"") {
+                    let candidate = &accumulated_text[json_start..];
+                    if let Ok(json_val) =
+                        serde_json::from_str::<serde_json::Value>(candidate)
+                    {
+                        if handle_edit_response(&json_val, active_file, dir, on_event) {
+                            *done_sent = true;
+                            return true;
+                        }
+                    }
+                }
+
                 // Analysis mode: plain text
                 let _ = on_event.send(StreamEvent::Done {
                     changes: vec![],
@@ -655,6 +673,16 @@ pub async fn send_chat_message_stream(
         if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&accumulated_text) {
             if handle_edit_response(&json_val, &active_file, &dir, &on_event) {
                 return Ok(());
+            }
+        }
+
+        // Fallback: extract JSON from mixed text
+        if let Some(json_start) = accumulated_text.find("{\"edits\"") {
+            let candidate = &accumulated_text[json_start..];
+            if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(candidate) {
+                if handle_edit_response(&json_val, &active_file, &dir, &on_event) {
+                    return Ok(());
+                }
             }
         }
 
