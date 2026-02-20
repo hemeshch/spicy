@@ -55,7 +55,7 @@ function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
   }));
 }
 
-export function useChat(activeFile: string | null) {
+export function useChat(activeFile: string | null, selectedModel: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [sessions, setSessions] = useState<ChatSessionMeta[]>([]);
@@ -278,6 +278,7 @@ export function useChat(activeFile: string | null) {
           message: content,
           activeFile: activeFileRef.current,
           history,
+          model: selectedModel,
           onEvent: channel,
         });
       } catch (error) {

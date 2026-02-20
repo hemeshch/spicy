@@ -7,6 +7,19 @@ const RAINBOW = ['#61BB46', '#FDB827', '#F5821F', '#E03A3E', '#963D97', '#009DDC
 const SUGGESTIONS = ['modify components', 'add subcircuits', 'adjust params', 'debug convergence'];
 const PILL_COLORS = [RAINBOW[0], RAINBOW[1], RAINBOW[3], RAINBOW[5]];
 
+const MODELS = [
+  { id: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
+  { id: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+  { id: 'anthropic/claude-opus-4.6', label: 'Claude Opus 4.6' },
+  { id: 'anthropic/claude-sonnet-4.6', label: 'Claude Sonnet 4.6' },
+  { id: 'anthropic/claude-haiku-4.5', label: 'Claude Haiku 4.5' },
+  { id: 'openai/gpt-5.2-pro', label: 'GPT-5.2 Pro' },
+  { id: 'openai/gpt-5.2', label: 'GPT-5.2' },
+  { id: 'moonshotai/kimi-k2.5', label: 'Kimi K2.5' },
+  { id: 'minimax/minimax-m2.5', label: 'MiniMax M2.5' },
+  { id: 'z-ai/glm-5', label: 'GLM-5' },
+];
+
 interface ChatProps {
   messages: ChatMessage[];
   isLoading: boolean;
@@ -17,6 +30,8 @@ interface ChatProps {
   activeSessionId: string | null;
   onSwitchSession: (id: string) => void;
   onNewSession: () => void;
+  selectedModel: string;
+  onModelChange: (model: string) => void;
 }
 
 export function Chat({
@@ -29,6 +44,8 @@ export function Chat({
   activeSessionId,
   onSwitchSession,
   onNewSession,
+  selectedModel,
+  onModelChange,
 }: ChatProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -148,11 +165,19 @@ export function Chat({
             run
           </button>
         </div>
-        {activeFile && (
-          <div className="input-footer">
-            <span>editing: {activeFile}</span>
-          </div>
-        )}
+        <div className="input-footer">
+          {activeFile && <span>editing: {activeFile}</span>}
+          <select
+            className="model-select"
+            value={selectedModel}
+            onChange={(e) => onModelChange(e.target.value)}
+            disabled={isLoading}
+          >
+            {MODELS.map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
+          </select>
+        </div>
       </form>
     </div>
   );

@@ -19,10 +19,11 @@ export default function App() {
   const [folderName, setFolderName] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [apiKeySaved, setApiKeySaved] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('google/gemini-3.1-pro-preview');
 
   const activeFile = files.length > 0 ? files[activeTabIndex] : null;
   const promptColor = getTabColor(activeTabIndex);
-  const { messages, isLoading, sendMessage, sessions, activeSessionId, switchSession, newSession } = useChat(activeFile);
+  const { messages, isLoading, sendMessage, sessions, activeSessionId, switchSession, newSession } = useChat(activeFile, selectedModel);
 
   const handleSaveApiKey = useCallback(async () => {
     if (!apiKey.trim()) return;
@@ -139,6 +140,8 @@ export default function App() {
             activeSessionId={activeSessionId}
             onSwitchSession={switchSession}
             onNewSession={newSession}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
           />
         </div>
       )}

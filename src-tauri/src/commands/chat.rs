@@ -397,6 +397,7 @@ pub async fn send_chat_message_stream(
     message: String,
     active_file: Option<String>,
     history: Vec<serde_json::Value>,
+    model: Option<String>,
     on_event: Channel<StreamEvent>,
 ) -> Result<(), String> {
     let api_key = {
@@ -477,8 +478,10 @@ pub async fn send_chat_message_stream(
         content: user_content,
     });
 
+    let selected_model = model.unwrap_or_else(|| "google/gemini-3.1-pro-preview".to_string());
+
     let request = OpenRouterRequest {
-        model: "google/gemini-3.1-pro-preview".to_string(),
+        model: selected_model,
         max_tokens: 16000,
         messages,
         stream: true,
