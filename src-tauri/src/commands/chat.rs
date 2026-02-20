@@ -28,25 +28,17 @@ pub enum StreamEvent {
 }
 
 #[derive(Serialize, Deserialize)]
-struct ClaudeMessage {
+struct ChatMsg {
     role: String,
     content: String,
 }
 
 #[derive(Serialize)]
-struct ThinkingConfig {
-    #[serde(rename = "type")]
-    thinking_type: String,
-}
-
-#[derive(Serialize)]
-struct ClaudeStreamRequest {
+struct OpenRouterRequest {
     model: String,
     max_tokens: u32,
-    system: String,
-    messages: Vec<ClaudeMessage>,
+    messages: Vec<ChatMsg>,
     stream: bool,
-    thinking: ThinkingConfig,
 }
 
 const SYSTEM_PROMPT: &str = r#"You are Spicy, an AI assistant for LTspice circuit schematics (.asc files).
@@ -410,7 +402,7 @@ pub async fn send_chat_message_stream(
     let api_key = {
         let mut key = state.api_key.lock().map_err(|e| e.to_string())?;
         if key.is_empty() {
-            if let Ok(env_key) = std::env::var("ANTHROPIC_API_KEY") {
+            if let Ok(env_key) = std::env::var("OPENROUTER_API_KEY") {
                 *key = env_key;
             }
         }
@@ -419,7 +411,7 @@ pub async fn send_chat_message_stream(
 
     if api_key.is_empty() {
         let _ = on_event.send(StreamEvent::Error {
-            message: "ANTHROPIC_API_KEY not set. Please set it as an environment variable."
+            message: "OPENROUTER_API_KEY not set. Please set it as an environment variable."
                 .to_string(),
         });
         return Ok(());
@@ -465,39 +457,37 @@ pub async fn send_chat_message_stream(
     }
     user_content.push_str(&message);
 
-    // Build message history
-    let mut messages: Vec<ClaudeMessage> = Vec::new();
+    // Build message history with system prompt first
+    let mut messages: Vec<ChatMsg> = vec![ChatMsg {
+        role: "system".to_string(),
+        content: SYSTEM_PROMPT.to_string(),
+    }];
 
     for msg in &history {
         if let (Some(role), Some(content)) = (msg["role"].as_str(), msg["content"].as_str()) {
-            messages.push(ClaudeMessage {
+            messages.push(ChatMsg {
                 role: role.to_string(),
                 content: content.to_string(),
             });
         }
     }
 
-    messages.push(ClaudeMessage {
+    messages.push(ChatMsg {
         role: "user".to_string(),
         content: user_content,
     });
 
-    let request = ClaudeStreamRequest {
-        model: "claude-sonnet-4-6".to_string(),
+    let request = OpenRouterRequest {
+        model: "google/gemini-3.1-pro-preview".to_string(),
         max_tokens: 16000,
-        system: SYSTEM_PROMPT.to_string(),
         messages,
         stream: true,
-        thinking: ThinkingConfig {
-            thinking_type: "adaptive".to_string(),
-        },
     };
 
     let client = reqwest::Client::new();
     let response = client
-        .post("https://api.anthropic.com/v1/messages")
-        .header("x-api-key", &api_key)
-        .header("anthropic-version", "2023-06-01")
+        .post("https://openrouter.ai/api/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key))
         .header("content-type", "application/json")
         .json(&request)
         .send()
@@ -513,7 +503,7 @@ pub async fn send_chat_message_stream(
         return Ok(());
     }
 
-    // Read SSE stream
+    // Read SSE stream (OpenAI-compatible format from OpenRouter)
     let mut stream = response.bytes_stream();
     let mut buffer = String::new();
     let mut accumulated_text = String::new();
@@ -535,45 +525,8 @@ pub async fn send_chat_message_stream(
         };
 
         if data == "[DONE]" {
-            return false;
-        }
-
-        let parsed = match serde_json::from_str::<serde_json::Value>(data) {
-            Ok(p) => p,
-            Err(_) => return false,
-        };
-
-        let event_type = parsed["type"].as_str().unwrap_or("");
-
-        match event_type {
-            "content_block_delta" => {
-                let delta_type = parsed["delta"]["type"].as_str().unwrap_or("");
-                match delta_type {
-                    "thinking_delta" => {
-                        if let Some(thinking) = parsed["delta"]["thinking"].as_str() {
-                            let _ = on_event.send(StreamEvent::Thinking {
-                                content: thinking.to_string(),
-                            });
-                        }
-                    }
-                    "text_delta" => {
-                        if let Some(text) = parsed["delta"]["text"].as_str() {
-                            // Detect JSON edit on first text chunk
-                            if accumulated_text.is_empty() && text.trim_start().starts_with('{') {
-                                *suppress_text = true;
-                            }
-                            accumulated_text.push_str(text);
-                            if !*suppress_text {
-                                let _ = on_event.send(StreamEvent::Text {
-                                    content: text.to_string(),
-                                });
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            "message_stop" => {
+            // Stream finished — process accumulated text
+            if !*done_sent {
                 // Check if accumulated text is JSON edit response
                 if let Ok(json_val) =
                     serde_json::from_str::<serde_json::Value>(accumulated_text)
@@ -584,7 +537,7 @@ pub async fn send_chat_message_stream(
                     }
                 }
 
-                // Fallback: extract JSON from mixed text (model may prefix with reasoning)
+                // Fallback: extract JSON from mixed text
                 if let Some(json_start) = accumulated_text.find("{\"edits\"") {
                     let candidate = &accumulated_text[json_start..];
                     if let Ok(json_val) =
@@ -604,18 +557,65 @@ pub async fn send_chat_message_stream(
                 });
                 *done_sent = true;
             }
-            "error" => {
-                let error_msg = parsed["error"]["message"]
-                    .as_str()
-                    .unwrap_or("Unknown API error");
-                let _ = on_event.send(StreamEvent::Error {
-                    message: error_msg.to_string(),
-                });
-                *done_sent = true;
-                return true;
-            }
-            _ => {}
+            return true;
         }
+
+        let parsed = match serde_json::from_str::<serde_json::Value>(data) {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
+
+        // Handle OpenRouter/OpenAI error objects
+        if let Some(err) = parsed.get("error") {
+            let error_msg = err["message"]
+                .as_str()
+                .unwrap_or("Unknown API error");
+            let _ = on_event.send(StreamEvent::Error {
+                message: error_msg.to_string(),
+            });
+            *done_sent = true;
+            return true;
+        }
+
+        // OpenAI-compatible streaming: choices[0].delta.content
+        if let Some(choices) = parsed["choices"].as_array() {
+            if let Some(choice) = choices.first() {
+                // Check finish_reason
+                if let Some(reason) = choice["finish_reason"].as_str() {
+                    if reason == "stop" || reason == "end_turn" {
+                        // Will be finalized on [DONE], nothing to do here
+                    }
+                }
+
+                // Extract reasoning/thinking from delta
+                if let Some(reasoning) = choice["delta"]["reasoning"].as_str() {
+                    if !reasoning.is_empty() {
+                        let _ = on_event.send(StreamEvent::Thinking {
+                            content: reasoning.to_string(),
+                        });
+                    }
+                }
+
+                // Extract text content from delta
+                if let Some(content) = choice["delta"]["content"].as_str() {
+                    if !content.is_empty() {
+                        // Detect JSON edit on first text chunk
+                        if accumulated_text.is_empty()
+                            && content.trim_start().starts_with('{')
+                        {
+                            *suppress_text = true;
+                        }
+                        accumulated_text.push_str(content);
+                        if !*suppress_text {
+                            let _ = on_event.send(StreamEvent::Text {
+                                content: content.to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
         false
     };
 
@@ -650,7 +650,7 @@ pub async fn send_chat_message_stream(
         }
     }
 
-    // Flush any remaining data in the buffer (e.g. message_stop without trailing newline)
+    // Flush any remaining data in the buffer
     if !done_sent && !buffer.trim().is_empty() {
         for line in buffer.lines() {
             let line = line.trim();
@@ -669,14 +669,13 @@ pub async fn send_chat_message_stream(
     }
 
     if !done_sent {
-        // Stream ended — do final edit check on accumulated text
+        // Stream ended without [DONE] — do final edit check
         if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&accumulated_text) {
             if handle_edit_response(&json_val, &active_file, &dir, &on_event) {
                 return Ok(());
             }
         }
 
-        // Fallback: extract JSON from mixed text
         if let Some(json_start) = accumulated_text.find("{\"edits\"") {
             let candidate = &accumulated_text[json_start..];
             if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(candidate) {

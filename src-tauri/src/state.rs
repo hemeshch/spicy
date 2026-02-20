@@ -7,7 +7,7 @@ pub struct AppState {
 
 impl AppState {
     pub fn new() -> Self {
-        let api_key = std::env::var("ANTHROPIC_API_KEY").unwrap_or_default();
+        let api_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
         Self {
             working_directory: Mutex::new(None),
             api_key: Mutex::new(api_key),

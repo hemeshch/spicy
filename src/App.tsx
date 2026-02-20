@@ -94,7 +94,7 @@ export default function App() {
                   <input
                     type="password"
                     className="api-key-input"
-                    placeholder="sk-ant-..."
+                    placeholder="sk-or-..."
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSaveApiKey()}
@@ -108,7 +108,7 @@ export default function App() {
                   </button>
                 </div>
                 <p className="api-key-hint">
-                  paste your Anthropic API key, or set ANTHROPIC_API_KEY in .env
+                  paste your OpenRouter API key, or set OPENROUTER_API_KEY in .env
                 </p>
               </div>
             )}
